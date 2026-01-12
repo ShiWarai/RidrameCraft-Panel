@@ -7,6 +7,7 @@ from routes.auth import login_required
 from utils.rcon import send_rcon_command
 from utils.docker_utils import get_container_stats
 from utils.spark import get_spark_data
+from utils.bluemap import check_bluemap_available
 
 resources_bp = Blueprint('resources', __name__)
 
@@ -78,10 +79,14 @@ def get_resources():
             docker_client, MINECRAFT_CONTAINER_NAME, USE_SPARK_MEMORY
         )
         
+        # Проверяем доступность BlueMap
+        bluemap_available = check_bluemap_available()
+        
         # Формируем ответ, приоритизируя данные Spark если они доступны
         response_data = {
             'success': True,
             'spark_available': spark_data.get('available', False),
+            'bluemap_available': bluemap_available,
             'cpu': {
                 'percent': round(cpu_percent, 1)
             },
@@ -120,4 +125,15 @@ def get_resources():
         
         return jsonify(response_data)
     except Exception as e:
-        return jsonify({'success': False, 'error': str(e)})
+        # При ошибке также проверяем BlueMap, но возвращаем False
+        bluemap_available = False
+        try:
+            bluemap_available = check_bluemap_available()
+        except:
+            pass
+        return jsonify({
+            'success': False, 
+            'error': str(e),
+            'bluemap_available': bluemap_available,
+            'spark_available': False
+        })

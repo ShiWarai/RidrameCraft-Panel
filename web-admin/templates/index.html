@@ -6,7 +6,7 @@
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
-    <title>RidrameCraft Console</title>
+    <title>RidrameCraft Panel</title>
     <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='web-console.ico') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
     <script>
@@ -28,7 +28,7 @@
         <div class="sidebar-header">
             <div style="display: flex; align-items: center; gap: 10px;">
                 <img src="{{ url_for('static', filename='web-console.ico') }}" style="width: 48px; height: 48px; image-rendering: pixelated;">
-                <span>RidrameCraft Console</span>
+                <span>RidrameCraft Panel</span>
             </div>
             <button class="logout-btn" onclick="logout()">Выход</button>
         </div>
@@ -90,14 +90,14 @@
         <div class="console-container">
             <!-- Вкладки -->
             <div class="tabs">
-                <button class="tab active" onclick="switchTab('commands', this)">📝 Команды</button>
-                <button class="tab" onclick="switchTab('terminal', this)">📋 Логи сервера</button>
-                <button class="tab" onclick="switchTab('map', this)">🗺️ Карта</button>
-                <button class="tab" onclick="switchTab('banlist', this)">🚫 Banlist / Whitelist</button>
+                <button class="tab admin-tab" id="commands-tab-btn" onclick="switchTab('commands', this)" style="display: none;">📝 Команды</button>
+                <button class="tab admin-tab" id="terminal-tab-btn" onclick="switchTab('terminal', this)" style="display: none;">📋 Логи сервера</button>
+                <button class="tab" id="map-tab-btn" onclick="switchTab('map', this)" style="display: none;">🗺️ Карта</button>
+                <button class="tab admin-tab" id="banlist-tab-btn" onclick="switchTab('banlist', this)" style="display: none;">🚫 Banlist / Whitelist</button>
             </div>
-
+            
             <!-- Контент вкладки команд -->
-            <div id="commands-tab" class="tab-content active">
+            <div id="commands-tab" class="tab-content">
                 <div class="quick-commands-grid" id="main-quick-commands">
                     <!-- Команды будут добавлены через JavaScript -->
                 </div>
@@ -107,7 +107,7 @@
                 </div>
                 <button class="add-command-btn" onclick="openAddCommandModal()">+ Добавить команду</button>
                 <div id="console" class="console"></div>
-            </div>
+                </div>
 
             <!-- Контент вкладки терминала -->
             <div id="terminal-tab" class="tab-content">
@@ -128,7 +128,7 @@
                 </div>
                 <div id="logs-console" class="console"></div>
             </div>
-
+            
             <!-- Контент вкладки карты -->
             <div id="map-tab" class="tab-content">
                 <iframe id="map-iframe" style="width: 100%; height: 100%; border: none;"></iframe>
@@ -213,17 +213,17 @@
             <div class="modal-header">
                 <h3>Выбор команды</h3>
                 <button class="modal-close" onclick="closeCommandsMenu()">&times;</button>
-            </div>
+                                        </div>
             <div class="modal-body">
                 <div class="modal-form-group">
                     <input type="text" id="commands-search-input" placeholder="Поиск команды..." autocomplete="off" style="width: 100%; padding: 8px; background: #1a1a1a; border: 2px solid #333; color: white; font-size: 0.9em;">
-                </div>
+                                        </div>
                 <div id="commands-menu-list" class="commands-menu-list">
                     <!-- Список команд будет добавлен через JavaScript -->
-                </div>
-            </div>
-        </div>
-    </div>
+                                        </div>
+                                        </div>
+                                        </div>
+                                    </div>
 
     <!-- Меню действий над игроком -->
     <div class="player-actions-menu" id="player-actions-menu"></div>
@@ -235,9 +235,9 @@
             navigator.serviceWorker.getRegistrations().then(function(registrations) {
                 for(let registration of registrations) {
                     registration.unregister();
-                }
-            });
-        }
+                    }
+                });
+            }
         // Устанавливаем роль пользователя для использования в модулях
         window.userRole = "{{ session.get('role', 'guest') }}";
     </script>

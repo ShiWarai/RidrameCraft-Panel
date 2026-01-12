@@ -119,6 +119,38 @@ function loadResources() {
                 } else if (sparkSection) {
                     sparkSection.style.display = 'none';
                 }
+                
+                // BlueMap доступность - показываем кнопку "Карта", если BlueMap доступен
+                const mapTabBtn = document.getElementById('map-tab-btn');
+                if (mapTabBtn) {
+                    if (data.bluemap_available === true) {
+                        mapTabBtn.style.display = '';
+                        // Если это первая доступная вкладка и мы еще не переключились ни на одну, активируем её
+                        const activeTab = document.querySelector('.tab.active');
+                        if (!activeTab) {
+                            const userRole = (window.userRole || 'guest');
+                            if (userRole === 'guest') {
+                                // Для гостя карта может быть первой доступной вкладкой
+                                setTimeout(() => {
+                                    if (typeof switchTab === 'function') {
+                                        switchTab('map', mapTabBtn);
+                                    }
+                                }, 100);
+                            }
+                        }
+                    } else {
+                        mapTabBtn.style.display = 'none';
+                        // Если мы на вкладке карты и BlueMap недоступен, переключаемся на другую вкладку
+                        const mapTab = document.getElementById('map-tab');
+                        if (mapTab && mapTab.classList.contains('active')) {
+                            const firstAvailableTab = document.querySelector('.tab:not([style*="display: none"])');
+                            if (firstAvailableTab && typeof switchTab === 'function') {
+                                const tabName = firstAvailableTab.getAttribute('onclick').match(/switchTab\('(\w+)'/)[1];
+                                switchTab(tabName, firstAvailableTab);
+                            }
+                        }
+                    }
+                }
             } else {
                 const cpuValue = document.getElementById('cpu-value');
                 const ramValue = document.getElementById('ram-value');

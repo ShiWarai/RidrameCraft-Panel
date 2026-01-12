@@ -138,6 +138,16 @@ function switchTab(tabName, tabElement) {
  * Инициализация приложения
  */
 document.addEventListener('DOMContentLoaded', function() {
+    // Сначала скрываем все вкладки, которые зависят от доступа/доступности
+    // Они будут показаны динамически при загрузке данных
+    const adminTabs = ['commands-tab-btn', 'terminal-tab-btn', 'banlist-tab-btn'];
+    adminTabs.forEach(tabId => {
+        const tab = document.getElementById(tabId);
+        if (tab) tab.style.display = 'none';
+    });
+    const mapTab = document.getElementById('map-tab-btn');
+    if (mapTab) mapTab.style.display = 'none';
+    
     // Инициализация обработчиков команд
     if (typeof initCommandInputHandlers === 'function') {
         initCommandInputHandlers();
@@ -150,22 +160,25 @@ document.addEventListener('DOMContentLoaded', function() {
             if (typeof loadPlayers === 'function') loadPlayers();
             if (typeof loadResources === 'function') loadResources();
 
-            // Ограничения для гостевого режима
-            if ((window.userRole || 'guest') === 'guest') {
-                // Скрываем вкладки админа
-                const commandsTabBtn = document.querySelector('button[onclick*="commands"]');
-                const terminalTabBtn = document.querySelector('button[onclick*="terminal"]');
-                const banlistTabBtn = document.querySelector('button[onclick*="banlist"]');
+            // Показываем вкладки в зависимости от уровня доступа
+            const userRole = (window.userRole || 'guest');
+            if (userRole === 'admin') {
+                // Показываем все вкладки админа
+                const commandsTabBtn = document.getElementById('commands-tab-btn');
+                const terminalTabBtn = document.getElementById('terminal-tab-btn');
+                const banlistTabBtn = document.getElementById('banlist-tab-btn');
                 
-                if (commandsTabBtn) commandsTabBtn.style.display = 'none';
-                if (terminalTabBtn) terminalTabBtn.style.display = 'none';
-                if (banlistTabBtn) banlistTabBtn.style.display = 'none';
-
-                // Переключаем на карту, если мы на вкладке команд по умолчанию
-                const mapTabBtn = document.querySelector('button[onclick*="map"]');
-                if (mapTabBtn) {
-                    switchTab('map', mapTabBtn);
+                if (commandsTabBtn) commandsTabBtn.style.display = '';
+                if (terminalTabBtn) terminalTabBtn.style.display = '';
+                if (banlistTabBtn) banlistTabBtn.style.display = '';
+                
+                // Активируем первую вкладку (команды)
+                if (commandsTabBtn) {
+                    switchTab('commands', commandsTabBtn);
                 }
+            } else {
+                // Для гостя вкладки админа остаются скрытыми (уже скрыты по умолчанию)
+                // Вкладка карты будет показана в loadResources() если BlueMap доступен
 
                 // Добавляем стили для скрытия кнопок действий над игроками и добавления команд
                 const style = document.createElement('style');
@@ -195,6 +208,22 @@ document.addEventListener('DOMContentLoaded', function() {
         if (typeof checkStatus === 'function') checkStatus();
         if (typeof loadPlayers === 'function') loadPlayers();
         if (typeof loadResources === 'function') loadResources();
+        
+        // Показываем вкладки в зависимости от уровня доступа
+        const userRole = (window.userRole || 'guest');
+        if (userRole === 'admin') {
+            const commandsTabBtn = document.getElementById('commands-tab-btn');
+            const terminalTabBtn = document.getElementById('terminal-tab-btn');
+            const banlistTabBtn = document.getElementById('banlist-tab-btn');
+            
+            if (commandsTabBtn) commandsTabBtn.style.display = '';
+            if (terminalTabBtn) terminalTabBtn.style.display = '';
+            if (banlistTabBtn) banlistTabBtn.style.display = '';
+            
+            if (commandsTabBtn) {
+                switchTab('commands', commandsTabBtn);
+            }
+        }
     }
 
     // Обновление каждые 5 секунд
