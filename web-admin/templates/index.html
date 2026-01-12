@@ -6,7 +6,7 @@
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
-    <title>Minecraft Server Admin</title>
+    <title>RidrameCraft Console</title>
     <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='web-console.ico') }}">
     <script>
         // Отключаем кэш для всех запросов
@@ -678,7 +678,7 @@
         <div class="sidebar-header">
             <div style="display: flex; align-items: center; gap: 10px;">
                 <img src="{{ url_for('static', filename='web-console.ico') }}" style="width: 24px; height: 24px; image-rendering: pixelated;">
-                <span>MC Admin</span>
+                <span>RidrameCraft Console</span>
             </div>
             <button class="logout-btn" onclick="logout()">Выход</button>
         </div>
@@ -743,6 +743,7 @@
                 <button class="tab active" onclick="switchTab('commands', this)">📝 Команды</button>
                 <button class="tab" onclick="switchTab('terminal', this)">📋 Консоль сервера</button>
                 <button class="tab" onclick="switchTab('map', this)">🗺️ Карта сервера</button>
+                <button class="tab" onclick="switchTab('banlist', this)">🚫 Банлист / Белый список</button>
             </div>
             
             <!-- Вкладка команд -->
@@ -766,6 +767,45 @@
             <!-- Вкладка живой консоли -->
             <div id="terminal-tab" class="tab-content">
                 <iframe id="terminal-iframe" src="" style="width: 100%; height: 100%; min-height: 600px; border: none; border-radius: 4px; background: #1a1a1a;"></iframe>
+            </div>
+
+            <!-- Вкладка банлиста и whitelist -->
+            <div id="banlist-tab" class="tab-content">
+                <div style="display: flex; flex-direction: column; height: 100%; min-height: 600px;">
+                    
+                    <div style="display: flex; gap: 20px; flex: 1; min-height: 0;">
+                        <!-- Банлист -->
+                        <div style="flex: 1; display: flex; flex-direction: column; min-height: 0;">
+                            <h3 style="color: #e0e0e0; margin: 0 0 15px 0; font-size: 1em;">🚫 Банлист</h3>
+                            <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+                                <input type="text" id="ban-player-input" placeholder="Имя игрока" style="flex: 1; padding: 10px; background: #2a2a2a; border: 1px solid #3a3a3a; border-radius: 4px; color: #e0e0e0;">
+                                <input type="text" id="ban-reason-input" placeholder="Причина (необязательно)" style="flex: 1; padding: 10px; background: #2a2a2a; border: 1px solid #3a3a3a; border-radius: 4px; color: #e0e0e0;">
+                                <button onclick="addToBanlist()" style="padding: 10px 20px; background: #ff5555; color: white; border: 2px solid #000; border-radius: 0; cursor: pointer; font-weight: 600; box-shadow: inset -2px -2px 0 rgba(0,0,0,0.4), inset 2px 2px 0 rgba(255,255,255,0.15);">Добавить</button>
+                            </div>
+                            <div id="banlist-container" style="flex: 1; background: #1a1a1a; border: 2px solid #333; border-radius: 4px; padding: 15px; overflow-y: auto; min-height: 0;">
+                                <div class="empty-state">
+                                    <div class="empty-state-icon">⏳</div>
+                                    <div>Загрузка...</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Белый список -->
+                        <div style="flex: 1; display: flex; flex-direction: column; min-height: 0;">
+                            <h3 style="color: #e0e0e0; margin: 0 0 15px 0; font-size: 1em;">✅ Белый список</h3>
+                            <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+                                <input type="text" id="whitelist-player-input" placeholder="Имя игрока" style="flex: 1; padding: 10px; background: #2a2a2a; border: 1px solid #3a3a3a; border-radius: 4px; color: #e0e0e0;">
+                                <button onclick="addToWhitelist()" style="padding: 10px 20px; background: #3c8527; color: white; border: 2px solid #000; border-radius: 0; cursor: pointer; font-weight: 600; box-shadow: inset -2px -2px 0 rgba(0,0,0,0.4), inset 2px 2px 0 rgba(255,255,255,0.15);">Добавить</button>
+                            </div>
+                            <div id="whitelist-container" style="flex: 1; background: #1a1a1a; border: 2px solid #333; border-radius: 4px; padding: 15px; overflow-y: auto; min-height: 0;">
+                                <div class="empty-state">
+                                    <div class="empty-state-icon">⏳</div>
+                                    <div>Загрузка...</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -1518,7 +1558,396 @@
                     }
                 }
             }
+
+            // Если переключились на банлист/whitelist, загружаем данные
+            if (tabName === 'banlist') {
+                refreshBanlistAndWhitelist();
+                // Включаем автообновление автоматически
+                toggleBanlistAutoRefresh(true);
+            } else {
+                // Останавливаем автообновление при переключении на другую вкладку
+                toggleBanlistAutoRefresh(false);
+            }
         }
+
+        // Автообновление банлиста и whitelist
+        let banlistAutoRefreshInterval = null;
+        let banlistUpdateInProgress = false; // Флаг для предотвращения конфликтов обновлений
+
+        function refreshBanlistAndWhitelist() {
+            // Пропускаем обновление если уже идет обновление после изменения
+            if (banlistUpdateInProgress) {
+                return;
+            }
+            // При автообновлении не показываем загрузку, список остается видимым
+            loadBanlist(false);
+            loadWhitelist(false);
+        }
+
+        function toggleBanlistAutoRefresh(enable) {
+            // Останавливаем предыдущий интервал если есть
+            if (banlistAutoRefreshInterval) {
+                clearInterval(banlistAutoRefreshInterval);
+                banlistAutoRefreshInterval = null;
+            }
+            
+            if (enable) {
+                banlistAutoRefreshInterval = setInterval(refreshBanlistAndWhitelist, 5000); // Обновляем каждые 5 секунд
+            }
+        }
+
+        // Функция для обновления списков после изменения (с временным отключением автообновления)
+        function updateBanlistAfterChange() {
+            banlistUpdateInProgress = true;
+            // Обновляем списки без показа загрузки
+            loadBanlist(false);
+            loadWhitelist(false);
+            // Через небольшую задержку возобновляем автообновление
+            setTimeout(() => {
+                banlistUpdateInProgress = false;
+            }, 1000);
+        }
+
+        // Функция для получения UUID игрока через Mojang API
+        async function getPlayerUUID(username) {
+            try {
+                const response = await fetch(`https://api.mojang.com/users/profiles/minecraft/${username}`);
+                if (response.ok) {
+                    const data = await response.json();
+                    let uuid = data.id;
+                    // Форматируем UUID с дефисами
+                    if (uuid && uuid.length === 32 && uuid.indexOf('-') === -1) {
+                        uuid = `${uuid.substring(0, 8)}-${uuid.substring(8, 12)}-${uuid.substring(12, 16)}-${uuid.substring(16, 20)}-${uuid.substring(20)}`;
+                    }
+                    return uuid;
+                }
+            } catch (e) {
+                console.error(`Error getting UUID for ${username}:`, e);
+            }
+            return null;
+        }
+
+        // Функция для получения URL аватарки
+        function getPlayerAvatarUrl(username, uuid) {
+            if (uuid) {
+                return `https://mc-heads.net/avatar/${uuid}/40`;
+            }
+            return 'https://mc-heads.net/avatar/8667ba71-b85a-4004-af54-457fa973f346/40'; // Дефолтный аватар
+        }
+
+        // Функции для работы с банлистом
+        async function loadBanlist(showLoading = true) {
+            const container = document.getElementById('banlist-container');
+            
+            // Сохраняем старое содержимое
+            const oldContent = container.innerHTML;
+            const isEmpty = oldContent.includes('empty-state') && (oldContent.includes('Загрузка') || oldContent.trim() === '');
+            
+            // Показываем индикатор загрузки только если контейнер действительно пуст (первая загрузка)
+            // При автообновлении (showLoading = false) никогда не показываем загрузку
+            if (showLoading && isEmpty) {
+                container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">⏳</div><div>Загрузка...</div></div>';
+            }
+            
+            fetch('/api/banlist')
+                .then(response => {
+                    if (response.status === 401) {
+                        window.location.href = '/';
+                        return Promise.reject('Unauthorized');
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (data.success && data.players && data.players.length > 0) {
+                        container.innerHTML = data.players.map(player => {
+                            const defaultAvatar = 'https://mc-heads.net/avatar/8667ba71-b85a-4004-af54-457fa973f346/40';
+                            const avatarUrl = player.avatar || (player.uuid ? `https://mc-heads.net/avatar/${player.uuid}/40` : defaultAvatar);
+                            const playerEscaped = player.name.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                            return `
+                                <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px; background: #2a2a2a; border: 1px solid #3a3a3a; border-radius: 4px; margin-bottom: 8px;">
+                                    <div style="display: flex; align-items: center; gap: 12px;">
+                                        <img src="${avatarUrl}" 
+                                             alt="${player.name}" 
+                                             style="width: 32px; height: 32px; border-radius: 2px; border: 1px solid #444; image-rendering: pixelated;"
+                                             onerror="this.src='${defaultAvatar}'">
+                                        <span style="color: #e0e0e0; font-weight: 500;">${player.name}</span>
+                                    </div>
+                                    ${userRole === 'admin' ? `<button onclick="removeFromBanlist('${playerEscaped}')" style="padding: 6px 12px; background: #ff5555; color: white; border: 2px solid #000; border-radius: 0; cursor: pointer; font-size: 0.85em; font-weight: 600; box-shadow: inset -2px -2px 0 rgba(0,0,0,0.4), inset 2px 2px 0 rgba(255,255,255,0.15);">Разбанить</button>` : ''}
+                                </div>
+                            `;
+                        }).join('');
+                    } else {
+                        container.innerHTML = `
+                            <div class="empty-state">
+                                <div class="empty-state-icon">✅</div>
+                                <div>Нет забаненных игроков</div>
+                            </div>
+                        `;
+                    }
+                })
+                .catch(error => {
+                    container.innerHTML = `
+                        <div class="empty-state">
+                            <div class="empty-state-icon">⚠️</div>
+                            <div>Ошибка загрузки: ${error.message || 'Неизвестная ошибка'}</div>
+                        </div>
+                    `;
+                });
+        }
+
+        function addToBanlist() {
+            if (userRole !== 'admin') {
+                alert('Недостаточно прав для выполнения этого действия');
+                return;
+            }
+            
+            const playerInput = document.getElementById('ban-player-input');
+            const reasonInput = document.getElementById('ban-reason-input');
+            const player = playerInput.value.trim();
+            const reason = reasonInput.value.trim() || 'Забанен администратором';
+            
+            if (!player) {
+                alert('Введите имя игрока');
+                playerInput.focus();
+                return;
+            }
+            
+            fetch('/api/banlist', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({action: 'add', player: player, reason: reason})
+            })
+            .then(response => {
+                if (response.status === 401) {
+                    window.location.href = '/';
+                    return Promise.reject('Unauthorized');
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.success) {
+                    playerInput.value = '';
+                    reasonInput.value = '';
+                    updateBanlistAfterChange();
+                    addConsoleLine(`Игрок ${player} добавлен в банлист. Причина: ${reason}`, 'success');
+                } else {
+                    alert(`Ошибка: ${data.error || 'Неизвестная ошибка'}`);
+                }
+            })
+            .catch(error => {
+                alert(`Ошибка соединения: ${error.message}`);
+            });
+        }
+
+        function removeFromBanlist(player) {
+            if (userRole !== 'admin') {
+                alert('Недостаточно прав для выполнения этого действия');
+                return;
+            }
+            
+            if (!confirm(`Вы уверены, что хотите разбанить игрока ${player}?`)) {
+                return;
+            }
+            
+            fetch('/api/banlist', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({action: 'remove', player: player})
+            })
+            .then(response => {
+                if (response.status === 401) {
+                    window.location.href = '/';
+                    return Promise.reject('Unauthorized');
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.success) {
+                    updateBanlistAfterChange();
+                    addConsoleLine(`Игрок ${player} разбанен`, 'success');
+                } else {
+                    alert(`Ошибка: ${data.error || 'Неизвестная ошибка'}`);
+                }
+            })
+            .catch(error => {
+                alert(`Ошибка соединения: ${error.message}`);
+            });
+        }
+
+        // Функции для работы с whitelist
+        async function loadWhitelist(showLoading = true) {
+            const container = document.getElementById('whitelist-container');
+            
+            // Сохраняем старое содержимое
+            const oldContent = container.innerHTML;
+            const isEmpty = oldContent.includes('empty-state') && (oldContent.includes('Загрузка') || oldContent.trim() === '');
+            
+            // Показываем индикатор загрузки только если контейнер действительно пуст (первая загрузка)
+            // При автообновлении (showLoading = false) никогда не показываем загрузку
+            if (showLoading && isEmpty) {
+                container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">⏳</div><div>Загрузка...</div></div>';
+            }
+            
+            fetch('/api/whitelist')
+                .then(response => {
+                    if (response.status === 401) {
+                        window.location.href = '/';
+                        return Promise.reject('Unauthorized');
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (data.success && data.players && data.players.length > 0) {
+                        container.innerHTML = data.players.map(player => {
+                            const defaultAvatar = 'https://mc-heads.net/avatar/8667ba71-b85a-4004-af54-457fa973f346/40';
+                            const avatarUrl = player.avatar || (player.uuid ? `https://mc-heads.net/avatar/${player.uuid}/40` : defaultAvatar);
+                            const playerEscaped = player.name.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                            return `
+                                <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px; background: #2a2a2a; border: 1px solid #3a3a3a; border-radius: 4px; margin-bottom: 8px;">
+                                    <div style="display: flex; align-items: center; gap: 12px;">
+                                        <img src="${avatarUrl}" 
+                                             alt="${player.name}" 
+                                             style="width: 32px; height: 32px; border-radius: 2px; border: 1px solid #444; image-rendering: pixelated;"
+                                             onerror="this.src='${defaultAvatar}'">
+                                        <span style="color: #e0e0e0; font-weight: 500;">${player.name}</span>
+                                    </div>
+                                    ${userRole === 'admin' ? `<button onclick="removeFromWhitelist('${playerEscaped}')" style="padding: 6px 12px; background: #ff5555; color: white; border: 2px solid #000; border-radius: 0; cursor: pointer; font-size: 0.85em; font-weight: 600; box-shadow: inset -2px -2px 0 rgba(0,0,0,0.4), inset 2px 2px 0 rgba(255,255,255,0.15);">Удалить</button>` : ''}
+                                </div>
+                            `;
+                        }).join('');
+                    } else {
+                        container.innerHTML = `
+                            <div class="empty-state">
+                                <div class="empty-state-icon">📝</div>
+                                <div>Белый список пуст</div>
+                            </div>
+                        `;
+                    }
+                })
+                .catch(error => {
+                    // Восстанавливаем старое содержимое при ошибке, если оно было
+                    if (!isEmpty && oldContent) {
+                        container.innerHTML = oldContent;
+                    } else {
+                        container.innerHTML = `
+                            <div class="empty-state">
+                                <div class="empty-state-icon">⚠️</div>
+                                <div>Ошибка загрузки: ${error.message || 'Неизвестная ошибка'}</div>
+                            </div>
+                        `;
+                    }
+                });
+        }
+
+        function addToWhitelist() {
+            if (userRole !== 'admin') {
+                alert('Недостаточно прав для выполнения этого действия');
+                return;
+            }
+            
+            const playerInput = document.getElementById('whitelist-player-input');
+            const player = playerInput.value.trim();
+            
+            if (!player) {
+                alert('Введите имя игрока');
+                playerInput.focus();
+                return;
+            }
+            
+            fetch('/api/whitelist', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({action: 'add', player: player})
+            })
+            .then(response => {
+                if (response.status === 401) {
+                    window.location.href = '/';
+                    return Promise.reject('Unauthorized');
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.success) {
+                    playerInput.value = '';
+                    updateBanlistAfterChange();
+                    addConsoleLine(`Игрок ${player} добавлен в белый список`, 'success');
+                } else {
+                    alert(`Ошибка: ${data.error || 'Неизвестная ошибка'}`);
+                }
+            })
+            .catch(error => {
+                alert(`Ошибка соединения: ${error.message}`);
+            });
+        }
+
+        function removeFromWhitelist(player) {
+            if (userRole !== 'admin') {
+                alert('Недостаточно прав для выполнения этого действия');
+                return;
+            }
+            
+            if (!confirm(`Вы уверены, что хотите удалить игрока ${player} из белого списка?`)) {
+                return;
+            }
+            
+            fetch('/api/whitelist', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({action: 'remove', player: player})
+            })
+            .then(response => {
+                if (response.status === 401) {
+                    window.location.href = '/';
+                    return Promise.reject('Unauthorized');
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.success) {
+                    updateBanlistAfterChange();
+                    addConsoleLine(`Игрок ${player} удален из белого списка`, 'success');
+                } else {
+                    alert(`Ошибка: ${data.error || 'Неизвестная ошибка'}`);
+                }
+            })
+            .catch(error => {
+                alert(`Ошибка соединения: ${error.message}`);
+            });
+        }
+
+        // Обработчики Enter для полей ввода и чекбокса автообновления
+        document.addEventListener('DOMContentLoaded', () => {
+            const banPlayerInput = document.getElementById('ban-player-input');
+            const banReasonInput = document.getElementById('ban-reason-input');
+            const whitelistPlayerInput = document.getElementById('whitelist-player-input');
+            
+            if (banPlayerInput) {
+                banPlayerInput.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        addToBanlist();
+                    }
+                });
+            }
+            
+            if (banReasonInput) {
+                banReasonInput.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        addToBanlist();
+                    }
+                });
+            }
+            
+            if (whitelistPlayerInput) {
+                whitelistPlayerInput.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        addToWhitelist();
+                    }
+                });
+            }
+        });
 
         // Загрузка логов сервера
         let autoRefreshInterval = null;
@@ -1764,9 +2193,11 @@
                 // Скрываем вкладки админа
                 const commandsTabBtn = document.querySelector('button[onclick*="commands"]');
                 const terminalTabBtn = document.querySelector('button[onclick*="terminal"]');
+                const banlistTabBtn = document.querySelector('button[onclick*="banlist"]');
                 
                 if (commandsTabBtn) commandsTabBtn.style.display = 'none';
                 if (terminalTabBtn) terminalTabBtn.style.display = 'none';
+                if (banlistTabBtn) banlistTabBtn.style.display = 'none';
 
                 // Переключаем на карту, если мы на вкладке команд по умолчанию
                 const mapTabBtn = document.querySelector('button[onclick*="map"]');
@@ -1780,6 +2211,8 @@
                     .player-actions-menu, .add-command-btn, .command-input-group { display: none !important; }
                     .player-card { cursor: default !important; }
                     .player-card:hover { transform: none !important; box-shadow: none !important; border-color: #333 !important; }
+                    #banlist-tab button[onclick*="addTo"], #banlist-tab input[type="text"], 
+                    #banlist-tab button[onclick*="removeFrom"] { display: none !important; }
                 `;
                 document.head.appendChild(style);
                 

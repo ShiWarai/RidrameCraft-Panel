@@ -678,6 +678,227 @@ def save_custom_commands():
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 
+def parse_banlist_response(response_text):
+    """Парсит ответ команды banlist и возвращает список забаненных игроков"""
+    players = []
+    if not response_text:
+        return players
+    
+    # Формат ответа может быть разным:
+    # 1. "There are X banned players: player1, player2, player3" (старый формат)
+    # 2. "There are X ban(s):\nvictor was banned by ShiWarai: Banned by an operator." (новый многострочный формат)
+    # 3. "There are no banned players"
+    
+    response_lower = response_text.lower().strip()
+    
+    # Проверяем на пустой список
+    if any(phrase in response_lower for phrase in ['no banned players', 'нет забаненных игроков', 'there are 0 ban']):
+        return players
+    
+    lines = response_text.strip().split('\n')
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        
+        # Пропускаем служебные строки заголовка
+        if any(phrase in line.lower() for phrase in ['there are', 'ban(s)', 'banned players']):
+            # Но если в строке есть список игроков после двоеточия (старый формат), обрабатываем
+            if ':' in line and 'was banned' not in line.lower():
+                parts = line.split(':', 1)
+                if len(parts) == 2:
+                    player_list = parts[1].strip()
+                    if player_list:
+                        # Разделяем по запятым и очищаем
+                        found_players = [p.strip() for p in player_list.split(',') if p.strip()]
+                        if found_players:
+                            players.extend(found_players)
+            continue
+        
+        # Обрабатываем новый формат: "victor was banned by ShiWarai: Banned by an operator."
+        # или "victor was banned by ShiWarai: reason"
+        if 'was banned' in line.lower():
+            # Извлекаем имя игрока из начала строки
+            # Формат: "victor was banned by ..."
+            parts = line.split(' was banned', 1)
+            if len(parts) >= 1:
+                player_name = parts[0].strip()
+                # Убираем ANSI escape коды если есть
+                import re
+                player_name = re.sub(r'\x1b\[[0-9;]*m', '', player_name)
+                if player_name and len(player_name) < 20:  # Имена игроков обычно короче
+                    players.append(player_name)
+            continue
+        
+        # Обрабатываем формат "player: reason" или "player: UUID"
+        if ':' in line and 'was banned' not in line.lower():
+            player_part = line.split(':', 1)[0].strip()
+            # Убираем ANSI escape коды
+            import re
+            player_part = re.sub(r'\x1b\[[0-9;]*m', '', player_part)
+            # Проверяем, что это похоже на имя игрока
+            if player_part and len(player_part) < 20 and not any(phrase in player_part.lower() for phrase in ['banned', 'operator', 'reason', 'uuid', 'there are']):
+                players.append(player_part)
+            continue
+        
+        # Если строка похожа на имя игрока (просто имя без дополнительной информации)
+        if not any(phrase in line.lower() for phrase in ['banned', 'operator', 'reason', 'uuid', 'there are', 'was banned']):
+            # Убираем ANSI escape коды
+            import re
+            clean_line = re.sub(r'\x1b\[[0-9;]*m', '', line)
+            if len(clean_line) < 20 and clean_line.replace('_', '').replace('-', '').replace(' ', '').isalnum():
+                players.append(clean_line)
+    
+    # Удаляем дубликаты, сохраняя порядок
+    seen = set()
+    unique_players = []
+    for player in players:
+        player_lower = player.lower()
+        if player_lower not in seen:
+            seen.add(player_lower)
+            unique_players.append(player)
+    
+    return unique_players
+
+def parse_whitelist_response(response_text):
+    """Парсит ответ команды whitelist list и возвращает список игроков в whitelist"""
+    players = []
+    if not response_text:
+        return players
+    
+    # Формат ответа: "There are X whitelisted players: player1, player2, player3"
+    # Или: "There are no whitelisted players"
+    lines = response_text.strip().split('\n')
+    for line in lines:
+        if 'no whitelisted players' in line.lower() or 'нет игроков в белом списке' in line.lower():
+            return players
+        
+        # Ищем строку с игроками
+        if ':' in line:
+            parts = line.split(':', 1)
+            if len(parts) == 2:
+                player_list = parts[1].strip()
+                if player_list:
+                    # Разделяем по запятым и очищаем
+                    players = [p.strip() for p in player_list.split(',') if p.strip()]
+    
+    return players
+
+@app.route('/api/banlist', methods=['GET'])
+@login_required(role='admin')
+def get_banlist():
+    """Получить список забаненных игроков с UUID и аватарами"""
+    try:
+        result = send_rcon_command('banlist')
+        if not result['success']:
+            return jsonify({'success': False, 'error': result.get('error', 'Ошибка получения банлиста'), 'players': []})
+        
+        players = parse_banlist_response(result.get('response', ''))
+        
+        # Получаем UUID и аватары для каждого игрока
+        players_with_data = []
+        for player_name in players:
+            uuid = get_player_uuid(player_name)
+            avatar_url = None
+            if uuid:
+                # Форматируем UUID с дефисами если нужно
+                if len(uuid) == 32 and '-' not in uuid:
+                    uuid = f"{uuid[:8]}-{uuid[8:12]}-{uuid[12:16]}-{uuid[16:20]}-{uuid[20:]}"
+                # Используем mc-heads.net как альтернативу Crafatar
+                avatar_url = f'https://mc-heads.net/avatar/{uuid}/40'
+            
+            players_with_data.append({
+                'name': player_name,
+                'uuid': uuid,
+                'avatar': avatar_url
+            })
+        
+        return jsonify({'success': True, 'players': players_with_data})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e), 'players': []})
+
+@app.route('/api/whitelist', methods=['GET'])
+@login_required(role='admin')
+def get_whitelist():
+    """Получить список игроков в whitelist с UUID и аватарами"""
+    try:
+        result = send_rcon_command('whitelist list')
+        if not result['success']:
+            return jsonify({'success': False, 'error': result.get('error', 'Ошибка получения whitelist'), 'players': []})
+        
+        players = parse_whitelist_response(result.get('response', ''))
+        
+        # Получаем UUID и аватары для каждого игрока
+        players_with_data = []
+        for player_name in players:
+            uuid = get_player_uuid(player_name)
+            avatar_url = None
+            if uuid:
+                # Форматируем UUID с дефисами если нужно
+                if len(uuid) == 32 and '-' not in uuid:
+                    uuid = f"{uuid[:8]}-{uuid[8:12]}-{uuid[12:16]}-{uuid[16:20]}-{uuid[20:]}"
+                # Используем mc-heads.net как альтернативу Crafatar
+                avatar_url = f'https://mc-heads.net/avatar/{uuid}/40'
+            
+            players_with_data.append({
+                'name': player_name,
+                'uuid': uuid,
+                'avatar': avatar_url
+            })
+        
+        return jsonify({'success': True, 'players': players_with_data})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e), 'players': []})
+
+@app.route('/api/banlist', methods=['POST'])
+@login_required(role='admin')
+def manage_banlist():
+    """Управление банлистом (добавление/удаление игроков)"""
+    try:
+        data = request.json
+        action = data.get('action')  # 'add' или 'remove'
+        player = data.get('player', '').strip()
+        reason = data.get('reason', 'Забанен администратором')
+        
+        if not player:
+            return jsonify({'success': False, 'error': 'Не указан игрок'})
+        
+        if action == 'add':
+            command = f'ban {player} {reason}'
+        elif action == 'remove':
+            command = f'pardon {player}'
+        else:
+            return jsonify({'success': False, 'error': 'Неизвестное действие. Используйте "add" или "remove"'})
+        
+        result = send_rcon_command(command)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/whitelist', methods=['POST'])
+@login_required(role='admin')
+def manage_whitelist():
+    """Управление whitelist (добавление/удаление игроков)"""
+    try:
+        data = request.json
+        action = data.get('action')  # 'add' или 'remove'
+        player = data.get('player', '').strip()
+        
+        if not player:
+            return jsonify({'success': False, 'error': 'Не указан игрок'})
+        
+        if action == 'add':
+            command = f'whitelist add {player}'
+        elif action == 'remove':
+            command = f'whitelist remove {player}'
+        else:
+            return jsonify({'success': False, 'error': 'Неизвестное действие. Используйте "add" или "remove"'})
+        
+        result = send_rcon_command(command)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
 if __name__ == '__main__':
     # Включаем debug режим для автоматической перезагрузки при изменениях файлов
     # use_reloader=True перезагружает приложение при изменении файлов
