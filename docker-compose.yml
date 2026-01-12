@@ -94,6 +94,8 @@ services:
       - ./web-admin/app.py:/app/app.py:ro  # Монтируем код приложения (read-only для безопасности)
       - ./web-admin/templates:/app/templates:ro  # Монтируем шаблоны
       - ./web-admin/static:/app/static:ro  # Монтируем статику
+      - ./web-admin/routes:/app/routes:ro  # Монтируем Blueprints
+      - ./web-admin/utils:/app/utils:ro  # Монтируем утилиты
       - ./web-admin/data:/app/data  # Папка для данных приложения (custom_commands.json и др.)
     restart: unless-stopped
     networks:
