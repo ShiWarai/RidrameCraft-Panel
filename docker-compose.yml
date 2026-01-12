@@ -1,0 +1,125 @@
+services:
+  fix-permissions:
+    image: alpine:latest
+    container_name: fix-permissions
+    volumes:
+      - ./modpacks:/modpack-source:ro
+      - ./data/${SERVER_DATA_DIR:-vanilla}:/data
+    environment:
+      - MODPACK_PATH=${MODPACK_PATH:-}
+      - SERVER_DATA_DIR=${SERVER_DATA_DIR:-vanilla}
+    command:
+      - sh
+      - -c
+      - |
+        # Копирование модпака при первом запуске
+        if [ -n "$$MODPACK_PATH" ]; then
+          # Убираем префикс modpacks/ если он есть, оставляем только имя папки
+          MODPACK_NAME=$${MODPACK_PATH#modpacks/}
+          MODPACK_DIR="/modpack-source/$$MODPACK_NAME"
+          echo "Checking modpack path: $$MODPACK_PATH -> $$MODPACK_DIR"
+          if [ -d "$$MODPACK_DIR" ]; then
+            echo "Checking if modpack needs to be copied..."
+            if [ ! -d "/data" ] || [ -z "$$(ls -A /data 2>/dev/null)" ]; then
+              echo "Copying modpack from $$MODPACK_DIR to /data..."
+              cp -r $$MODPACK_DIR/* /data/ 2>/dev/null || true
+              echo "Modpack copied successfully"
+            else
+              echo "Data directory already exists and contains files. Skipping copy."
+            fi
+          else
+            echo "Modpack directory not found: $$MODPACK_DIR. Skipping copy."
+          fi
+        else
+          echo "MODPACK_PATH not set. Skipping copy."
+        fi
+        # Исправление прав доступа
+        echo "Fixing permissions..."
+        chown -R 1000:1000 /data && chmod -R u+rwX,go+rwX /data || true
+        echo "Permissions fixed"
+    user: "0:0"  # Запускаем от root для копирования и изменения прав
+    restart: "no"
+
+  minecraft-server:
+    image: itzg/minecraft-server:latest
+    container_name: minecraft-server
+    ports:
+      - "25565:25565/tcp"  # Игровой порт Minecraft (TCP)
+      - "25565:25565/udp"  # Plasmo Voice голосовой чат (UDP)
+      # RCON порт доступен только внутри Docker сети для веб-панели
+      # Spark порт доступен только внутри Docker сети для веб-панели (если используется Spark)
+      - "25588:25588"
+      - "25589:8100"
+    volumes:
+      - ./data/${SERVER_DATA_DIR:-vanilla}:/data  # Папка данных сервера
+    depends_on:
+      - fix-permissions
+    environment:
+      - EULA=TRUE
+      - VERSION=${MINECRAFT_VERSION}
+      - MEMORY=${MEMORY}
+      - ENABLE_RCON=true
+      - RCON_PASSWORD=${RCON_PASSWORD}
+      - RCON_PORT=25575
+      # Переменные для Forge сервера
+      - TYPE=${TYPE:-}
+      - FORGE_VERSION=${FORGE_VERSION:-}
+      # JVM аргументы для поддержки Spark мода (исправляет проблему с нативным кодом)
+      # Формат: переменные с префиксом JVM_XX_XX добавляются как -XX:XX=value
+      # Для --enable-native-access используем EXTRA_JVM_ARGS
+      - EXTRA_JVM_ARGS=--enable-native-access=spark --enable-native-access=io.netty.common
+    restart: "no"  # Отключено для отладки ошибок
+    stdin_open: true
+    tty: true
+    networks:
+      - minecraft-network
+
+  web-admin:
+    build:
+      context: ./web-admin
+      dockerfile: Dockerfile
+    container_name: minecraft-web-admin
+    ports:
+      - "5000:5000"
+    environment:
+      - RCON_HOST=minecraft-server
+      - RCON_PORT=25575
+      - RCON_PASSWORD=${RCON_PASSWORD}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD}
+      - MINECRAFT_CONTAINER_NAME=minecraft-server
+      - USE_SPARK_MEMORY=${USE_SPARK_MEMORY:-false}
+      - SPARK_PORT=25588
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./web-admin/app.py:/app/app.py:ro  # Монтируем код приложения (read-only для безопасности)
+      - ./web-admin/templates:/app/templates:ro  # Монтируем шаблоны
+      - ./web-admin/static:/app/static:ro  # Монтируем статику
+      - ./web-admin/routes:/app/routes:ro  # Монтируем Blueprints
+      - ./web-admin/utils:/app/utils:ro  # Монтируем утилиты
+      - ./web-admin/data:/app/data  # Папка для данных приложения (custom_commands.json и др.)
+    restart: unless-stopped
+    networks:
+      - minecraft-network
+    depends_on:
+      - minecraft-server
+
+  web-console:
+    image: alpine:latest
+    container_name: minecraft-web-console
+    ports:
+      - "25590:7681"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: >
+      sh -c "apk add --no-cache ttyd docker-cli &&
+             ttyd -W -p 7681 -b /console-live docker logs -f minecraft-server"
+    restart: unless-stopped
+    networks:
+      - minecraft-network
+    depends_on:
+      - minecraft-server
+
+networks:
+  minecraft-network:
+    driver: bridge
+

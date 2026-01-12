@@ -1,0 +1,182 @@
+# ============================================
+# Web Admin Data
+# ============================================
+web-admin/data/*
+!web-admin/data/.gitkeep
+
+# ============================================
+# Python
+# ============================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+.venv/
+
+# ============================================
+# Environment Variables
+# ============================================
+.env
+*.env
+!*.env.example
+!env.*.example
+
+# ============================================
+# Minecraft Server Data
+# ============================================
+# Игровые данные сервера (миры, логи, конфиги)
+data/*
+modpacks/*
+!data/README.md
+# Исключаем только содержимое папок, но не сами папки
+!data/*/.gitkeep
+
+# Логи сервера
+*.log
+logs/
+server.log
+debug.log
+latest.log
+
+# Временные файлы сервера
+crash-reports/
+*.crash
+
+# ============================================
+# Docker
+# ============================================
+.dockerignore
+docker-compose.override.yml
+
+# ============================================
+# IDE и редакторы
+# ============================================
+# VSCode
+.vscode/
+*.code-workspace
+
+# PyCharm
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# Vim
+*.swp
+*.swo
+*~
+.vim/
+
+# Emacs
+*~
+\#*\#
+.\#*
+
+# ============================================
+# OS
+# ============================================
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+.Spotlight-V100
+.Trashes
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+*.stackdump
+[Dd]esktop.ini
+$RECYCLE.BIN/
+*.cab
+*.msi
+*.msix
+*.msm
+*.msp
+*.lnk
+
+# Linux
+*~
+.fuse_hidden*
+.directory
+.Trash-*
+.nfs*
+
+# ============================================
+# Временные файлы
+# ============================================
+*.tmp
+*.temp
+*.bak
+*.backup
+*.old
+*.orig
+*.save
+*.swp
+*.swo
+
+# ============================================
+# Архивы и сжатые файлы
+# ============================================
+# Игнорируем архивы модпаков (они могут быть большими)
+*.zip
+*.tar
+*.tar.gz
+*.rar
+*.7z
+*.gz
+
+# Но разрешаем примеры если они нужны
+# !modpacks/*.example.zip
+
+# ============================================
+# Другие файлы
+# ============================================
+# Файлы с паролями и секретами
+secrets/
+*.secret
+*.key
+*.pem
+*.p12
+*.jks
+
+# Файлы базы данных
+*.db
+*.sqlite
+*.sqlite3
+
+# Файлы конфигурации с чувствительными данными
+config.local.*
+settings.local.*
